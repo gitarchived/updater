@@ -49,6 +49,8 @@ func main() {
 
 	log.Println("Found", result.RowsAffected, "repositories. updating...")
 
+	var ctx = context.Background()
+
 	for _, repository := range repositories {
 		log.Println("Updating", repository.Name)
 
@@ -63,32 +65,46 @@ func main() {
 			continue
 		}
 
-		split := strings.Split(repository.Name, "/")[1]
-		name := fmt.Sprintf("%s-%s.zip", split, fmt.Sprint(repository.ID))
+		name := strings.Split(repository.Name, "/")[1]
 
-		err = os.WriteFile(name, resp.Body(), 0644) // save to disk
+		// Build the path (./t/h/e/r/e/p/o/n/a/m/e/[id].zip) all the name letter need to be a folder
+		path := strings.Split(name, "")
+		path = append(path, fmt.Sprintf("%d.zip", repository.ID))
+
+		localPath := "./" + strings.Join(path, "/")
+
+		// Save file local
+		err = os.MkdirAll(strings.Join(path[:len(path)-1], "/"), 0755)
 
 		if err != nil {
-			log.Println("Error saving", name)
+			log.Println("Error creating folders for", repository.Name)
 			continue
 		}
 
-		info, err := storage.FPutObject(context.Background(), "github", name, "./"+name, minio.PutObjectOptions{ContentType: "application/zip"})
+		err = os.WriteFile(localPath, resp.Body(), 0644)
 
 		if err != nil {
-			log.Println("Error uploading", name)
-			log.Println(err)
+			log.Println("Error saving file for", repository.Name)
 			continue
 		}
 
-		err = os.Remove(name) // delete from disk
+		// Upload file to object storage
+		_, err = storage.FPutObject(ctx, "github", strings.Join(path, "/"), strings.Join(path, "/"), minio.PutObjectOptions{ContentType: "application/zip"})
 
 		if err != nil {
-			log.Println("Error deleting", name)
+			log.Println("Error uploading file for", repository.Name)
 			continue
 		}
 
-		log.Println("Uploaded", name, "to", info.Key)
+		// Remove file local (even the directories)
+		err = os.RemoveAll(strings.Split(localPath, "/")[1])
+
+		if err != nil {
+			log.Println("Error removing local file for", repository.Name)
+			continue
+		}
+
+		log.Println("Updated", repository.Name)
 
 		time.Sleep(5 * time.Second) // wait 5 seconds to avoid rate limits
 	}
