@@ -18,10 +18,13 @@ import (
 )
 
 func main() {
-	err := godotenv.Load()
+	prod := os.Getenv("PRODUCTION")
 
-	if err != nil {
-		log.Fatal("Error loading .env file")
+	if prod == "" {
+		err := godotenv.Load()
+		if err != nil {
+			log.Fatal("Error loading .env file")
+		}
 	}
 
 	storage, err := minio.New(os.Getenv("STORAGE_ENDPOINT"), &minio.Options{
