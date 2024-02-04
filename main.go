@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"strings"
 	"time"
 
 	"github.com/gitarchived/updater/models"
 	"github.com/gitarchived/updater/utils"
+	"github.com/go-resty/resty/v2"
 	"github.com/joho/godotenv"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -70,25 +70,18 @@ func main() {
 			continue
 		}
 
+		url := fmt.Sprintf("https://github.com/%s/archive/refs/heads/master.zip", repository.Name)
+
+		client := resty.New()
+
+		resp, err := client.R().Get(url)
+
+		if err != nil {
+			log.Println("Error downloading", repository.Name)
+			continue
+		}
+
 		name := strings.Split(repository.Name, "/")[1]
-
-		cmdClone := exec.Command("git", "clone", fmt.Sprintf("https://github.com/%s.git", repository.Name), fmt.Sprintf("./%s", name))
-
-		if err := cmdClone.Run(); err != nil {
-			log.Println("Error cloning", repository.Name)
-			continue
-		}
-
-		// Create a zip file
-		cmdZip := exec.Command("git", "archive", "--format=zip", "--output", fmt.Sprintf("./%s.zip", name), "HEAD")
-
-		if err := cmdZip.Run(); err != nil {
-			log.Println("Error creating zip for", repository.Name)
-			continue
-		}
-
-		// Rename the file (neovim.zip -> [id].zip)
-		err = os.Rename(fmt.Sprintf("./%s.zip", name), fmt.Sprintf("./%d.zip", repository.ID))
 
 		// Build the path (./t/h/e/r/e/p/o/n/a/m/e/[id].zip) all the name letter need to be a folder
 		path := strings.Split(name, "")
@@ -104,20 +97,18 @@ func main() {
 			continue
 		}
 
-		// Move the file to the right path
-		err = os.Rename(fmt.Sprintf("./%d.zip", repository.ID), localPath)
+		err = os.WriteFile(localPath, resp.Body(), 0644)
 
 		if err != nil {
-			log.Println("Error moving file for", repository.Name)
+			log.Println("Error saving file for", repository.Name)
 			continue
 		}
 
 		// Upload file to object storage
-		_, err = storage.FPutObject(ctx, os.Getenv("STORAGE_BUCKET"), strings.Join(path, "/"), strings.Join(path, "/"), minio.PutObjectOptions{})
+		_, err = storage.FPutObject(ctx, os.Getenv("STORAGE_BUCKET"), strings.Join(path, "/"), strings.Join(path, "/"), minio.PutObjectOptions{ContentType: "application/zip"})
 
 		if err != nil {
 			log.Println("Error uploading file for", repository.Name)
-			println(err.Error())
 			continue
 		}
 
@@ -128,9 +119,6 @@ func main() {
 			log.Println("Error removing local file for", repository.Name)
 			continue
 		}
-
-		// Remove the repository
-		err = os.RemoveAll(name)
 
 		err = db.Model(&models.Repository{}).Where("id = ?", repository.ID).Update("last_commit", lastCommit).Error
 
