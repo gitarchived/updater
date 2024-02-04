@@ -87,6 +87,13 @@ func main() {
 		path := strings.Split(name, "")
 		path = append(path, fmt.Sprintf("%d.zip", repository.ID))
 
+		// Replace all the dots with a dash
+		for i, letter := range path {
+			if letter == "." {
+				path[i] = "-"
+			}
+		}
+
 		localPath := "./" + strings.Join(path, "/")
 
 		// Save file local
