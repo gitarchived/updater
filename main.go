@@ -79,21 +79,20 @@ func main() {
 			continue
 		}
 
-		// Create a bunde file
-		cmdBundle := exec.Command("git", "bundle", "create", fmt.Sprintf("./%s.bundle", name), "--all")
+		// Create a zip file
+		cmdZip := exec.Command("git", "archive", "--format=zip", "--output", fmt.Sprintf("./%s.zip", name), "HEAD")
 
-		if err := cmdBundle.Run(); err != nil {
-			log.Println("Error creating bundle for", repository.Name)
-			println(err.Error())
+		if err := cmdZip.Run(); err != nil {
+			log.Println("Error creating zip for", repository.Name)
 			continue
 		}
 
-		// Rename the file (neovim.bundle -> [id].bundle)
-		err = os.Rename(fmt.Sprintf("./%s.bundle", name), fmt.Sprintf("./%d.bundle", repository.ID))
+		// Rename the file (neovim.zip -> [id].zip)
+		err = os.Rename(fmt.Sprintf("./%s.zip", name), fmt.Sprintf("./%d.zip", repository.ID))
 
 		// Build the path (./t/h/e/r/e/p/o/n/a/m/e/[id].zip) all the name letter need to be a folder
 		path := strings.Split(name, "")
-		path = append(path, fmt.Sprintf("%d.bundle", repository.ID))
+		path = append(path, fmt.Sprintf("%d.zip", repository.ID))
 
 		localPath := "./" + strings.Join(path, "/")
 
@@ -106,7 +105,7 @@ func main() {
 		}
 
 		// Move the file to the right path
-		err = os.Rename(fmt.Sprintf("./%d.bundle", repository.ID), localPath)
+		err = os.Rename(fmt.Sprintf("./%d.zip", repository.ID), localPath)
 
 		if err != nil {
 			log.Println("Error moving file for", repository.Name)
