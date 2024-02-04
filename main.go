@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gitarchived/updater/models"
+	"github.com/gitarchived/updater/utils"
 	"github.com/go-resty/resty/v2"
 	"github.com/joho/godotenv"
 	"github.com/minio/minio-go/v7"
@@ -57,6 +58,18 @@ func main() {
 	for _, repository := range repositories {
 		log.Println("Updating", repository.Name)
 
+		lastCommit, err := utils.GetLastCommit(repository.Name)
+
+		if err != nil {
+			log.Println("Error getting last commit for", repository.Name)
+			continue
+		}
+
+		if lastCommit == repository.LastCommit {
+			log.Println("No new commits for", repository.Name, "skipping...")
+			continue
+		}
+
 		url := fmt.Sprintf("https://github.com/%s/archive/refs/heads/master.zip", repository.Name)
 
 		client := resty.New()
@@ -92,7 +105,7 @@ func main() {
 		}
 
 		// Upload file to object storage
-		_, err = storage.FPutObject(ctx, "github", strings.Join(path, "/"), strings.Join(path, "/"), minio.PutObjectOptions{ContentType: "application/zip"})
+		_, err = storage.FPutObject(ctx, os.Getenv("STORAGE_BUCKET"), strings.Join(path, "/"), strings.Join(path, "/"), minio.PutObjectOptions{ContentType: "application/zip"})
 
 		if err != nil {
 			log.Println("Error uploading file for", repository.Name)
@@ -104,6 +117,13 @@ func main() {
 
 		if err != nil {
 			log.Println("Error removing local file for", repository.Name)
+			continue
+		}
+
+		err = db.Model(&models.Repository{}).Where("id = ?", repository.ID).Update("last_commit", lastCommit).Error
+
+		if err != nil {
+			log.Println("Error updating last commit for", repository.Name)
 			continue
 		}
 

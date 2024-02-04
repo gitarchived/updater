@@ -4,7 +4,8 @@ import "gorm.io/gorm"
 
 type Repository struct {
 	gorm.Model
-	ID   uint
-	Name string // `user/repo`
-	Host string // `github`
+	ID         uint
+	Name       string // `user/repo`
+	Host       string // `github`
+	LastCommit string
 }
