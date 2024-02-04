@@ -87,20 +87,12 @@ func main() {
 			log.Println("Error creating bundle for", repository.Name)
 		}
 
-		// Build the path (./t/h/e/r/e/p/o/n/a/m/e/[id].zip) all the name letter need to be a folder
-		path := strings.Split(name, "")
-		path = append(path, fmt.Sprintf("%d.bundle", repository.ID))
-
-		for i, letter := range path {
-			if letter == "." {
-				path[i] = "-"
-			}
-		}
-
-		localPath := "./" + strings.Join(path, "/")
+		path := utils.GetSplitPath(name, repository.ID)
+		localPath := fmt.Sprintf("./%s", path)
+		dir := strings.Join(path[:len(path)-1], "/")
 
 		// Save file local
-		err = os.MkdirAll(strings.Join(path[:len(path)-1], "/"), 0755)
+		err = os.MkdirAll(dir, os.ModePerm)
 
 		if err != nil {
 			log.Println("Error creating folders for", repository.Name)
@@ -120,7 +112,6 @@ func main() {
 
 		if err != nil {
 			log.Println("Error uploading file for", repository.Name)
-			println(err.Error())
 			continue
 		}
 
@@ -134,6 +125,11 @@ func main() {
 
 		// Remove the repository
 		err = os.RemoveAll(name)
+
+		if err != nil {
+			log.Println("Error removing local repository for", repository.Name)
+			continue
+		}
 
 		err = db.Model(&models.Repository{}).Where("id = ?", repository.ID).Update("last_commit", lastCommit).Error
 
