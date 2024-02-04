@@ -84,6 +84,8 @@ func main() {
 
 		if err := cmdBundle.Run(); err != nil {
 			log.Println("Error creating bundle for", repository.Name)
+			println(err.Error())
+			continue
 		}
 
 		// Rename the file (neovim.bundle -> [id].bundle)
