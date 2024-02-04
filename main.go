@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 
 	"github.com/gitarchived/updater/models"
 	"github.com/gitarchived/updater/utils"
-	"github.com/go-resty/resty/v2"
 	"github.com/joho/godotenv"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -70,22 +70,28 @@ func main() {
 			continue
 		}
 
-		url := fmt.Sprintf("https://github.com/%s/archive/refs/heads/master.zip", repository.Name)
+		name := strings.Split(repository.Name, "/")[1]
 
-		client := resty.New()
+		cmdClone := exec.Command("git", "clone", fmt.Sprintf("https://github.com/%s.git", repository.Name), fmt.Sprintf("./%s", name))
 
-		resp, err := client.R().Get(url)
-
-		if err != nil {
-			log.Println("Error downloading", repository.Name)
+		if err := cmdClone.Run(); err != nil {
+			log.Println("Error cloning", repository.Name)
 			continue
 		}
 
-		name := strings.Split(repository.Name, "/")[1]
+		// Create a bunde file
+		cmdBundle := exec.Command("git", "bundle", "create", fmt.Sprintf("./%s.bundle", name), "--all")
+
+		if err := cmdBundle.Run(); err != nil {
+			log.Println("Error creating bundle for", repository.Name)
+		}
+
+		// Rename the file (neovim.bundle -> [id].bundle)
+		err = os.Rename(fmt.Sprintf("./%s.bundle", name), fmt.Sprintf("./%d.bundle", repository.ID))
 
 		// Build the path (./t/h/e/r/e/p/o/n/a/m/e/[id].zip) all the name letter need to be a folder
 		path := strings.Split(name, "")
-		path = append(path, fmt.Sprintf("%d.zip", repository.ID))
+		path = append(path, fmt.Sprintf("%d.bundle", repository.ID))
 
 		localPath := "./" + strings.Join(path, "/")
 
@@ -97,18 +103,20 @@ func main() {
 			continue
 		}
 
-		err = os.WriteFile(localPath, resp.Body(), 0644)
+		// Move the file to the right path
+		err = os.Rename(fmt.Sprintf("./%d.bundle", repository.ID), localPath)
 
 		if err != nil {
-			log.Println("Error saving file for", repository.Name)
+			log.Println("Error moving file for", repository.Name)
 			continue
 		}
 
 		// Upload file to object storage
-		_, err = storage.FPutObject(ctx, os.Getenv("STORAGE_BUCKET"), strings.Join(path, "/"), strings.Join(path, "/"), minio.PutObjectOptions{ContentType: "application/zip"})
+		_, err = storage.FPutObject(ctx, os.Getenv("STORAGE_BUCKET"), strings.Join(path, "/"), strings.Join(path, "/"), minio.PutObjectOptions{})
 
 		if err != nil {
 			log.Println("Error uploading file for", repository.Name)
+			println(err.Error())
 			continue
 		}
 
@@ -119,6 +127,9 @@ func main() {
 			log.Println("Error removing local file for", repository.Name)
 			continue
 		}
+
+		// Remove the repository
+		err = os.RemoveAll(name)
 
 		err = db.Model(&models.Repository{}).Where("id = ?", repository.ID).Update("last_commit", lastCommit).Error
 
