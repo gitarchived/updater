@@ -6,12 +6,12 @@ type CommitApiResponse struct {
 	Sha string `json:"sha"`
 }
 
-func GetLastCommit(repo string) (string, error) {
+func GetLastCommit(owner string, name string) (string, error) {
 	client := resty.New()
 
 	resp, err := client.R().
 		SetResult([]CommitApiResponse{}).
-		Get("https://api.github.com/repos/" + repo + "/commits")
+		Get("https://api.github.com/repos/" + owner + "/" + name + "/commits")
 
 	if err != nil {
 		return "", err

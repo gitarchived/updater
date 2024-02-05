@@ -5,7 +5,8 @@ import "gorm.io/gorm"
 type Repository struct {
 	gorm.Model
 	ID         uint
-	Name       string // `user/repo`
+	Owner      string
+	Name       string
 	Host       string // `github`
 	LastCommit string
 	Deleted    bool

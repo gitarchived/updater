@@ -61,9 +61,9 @@ func main() {
 			continue
 		}
 
-		log.Println("Updating", repository.Name)
+		log.Println("Updating", repository.Owner+"/"+repository.Name)
 
-		lastCommit, err := utils.GetLastCommit(repository.Name)
+		lastCommit, err := utils.GetLastCommit(repository.Owner, repository.Name)
 
 		if err != nil {
 			// Move the repository to the deleted state
@@ -83,24 +83,23 @@ func main() {
 			continue
 		}
 
-		name := strings.Split(repository.Name, "/")[1]
-
-		cmdClone := exec.Command("git", "clone", "--depth=100", fmt.Sprintf("https://github.com/%s", repository.Name))
+		fullName := repository.Owner + "/" + repository.Name
+		cmdClone := exec.Command("git", "clone", "--depth=100", fmt.Sprintf("https://github.com/%s", fullName))
 
 		if err := cmdClone.Run(); err != nil {
-			log.Println("Error cloning", repository.Name)
+			log.Println("Error cloning", fullName)
 			continue
 		}
 
 		// Create a bunde file
 		cmdBundle := exec.Command("git", "bundle", "create", fmt.Sprintf("%d.bundle", repository.ID), "--all")
-		cmdBundle.Dir = fmt.Sprintf("./%s", name)
+		cmdBundle.Dir = fmt.Sprintf("./%s", repository.Name)
 
 		if err := cmdBundle.Run(); err != nil {
-			log.Println("Error creating bundle for", repository.Name)
+			log.Println("Error creating bundle for", fullName)
 		}
 
-		path := utils.GetSplitPath(name, repository.ID)
+		path := utils.GetSplitPath(repository.Name, repository.ID)
 		localPath := fmt.Sprintf("./%s", strings.Join(path, "/"))
 		dir := strings.Join(path[:len(path)-1], "/")
 
@@ -108,15 +107,15 @@ func main() {
 		err = os.MkdirAll(dir, os.ModePerm)
 
 		if err != nil {
-			log.Println("Error creating folders for", repository.Name)
+			log.Println("Error creating folders for", fullName)
 			continue
 		}
 
 		// Move the file to the right path
-		err = os.Rename(fmt.Sprintf("./%s/%d.bundle", name, repository.ID), localPath)
+		err = os.Rename(fmt.Sprintf("./%s/%d.bundle", repository.Name, repository.ID), localPath)
 
 		if err != nil {
-			log.Println("Error moving file for", repository.Name)
+			log.Println("Error moving file for", fullName)
 			continue
 		}
 
@@ -124,7 +123,7 @@ func main() {
 		_, err = storage.FPutObject(ctx, os.Getenv("STORAGE_BUCKET"), strings.Join(path, "/"), strings.Join(path, "/"), minio.PutObjectOptions{})
 
 		if err != nil {
-			log.Println("Error uploading file for", repository.Name)
+			log.Println("Error uploading file for", fullName)
 			continue
 		}
 
@@ -132,26 +131,26 @@ func main() {
 		err = os.RemoveAll(strings.Split(localPath, "/")[1])
 
 		if err != nil {
-			log.Println("Error removing local file for", repository.Name)
+			log.Println("Error removing local file for", fullName)
 			continue
 		}
 
 		// Remove the repository
-		err = os.RemoveAll(name)
+		err = os.RemoveAll(repository.Name)
 
 		if err != nil {
-			log.Println("Error removing local repository for", repository.Name)
+			log.Println("Error removing local repository for", fullName)
 			continue
 		}
 
 		err = db.Model(&models.Repository{}).Where("id = ?", repository.ID).Update("last_commit", lastCommit).Error
 
 		if err != nil {
-			log.Println("Error updating last commit for", repository.Name)
+			log.Println("Error updating last commit for", fullName)
 			continue
 		}
 
-		log.Println("Updated", repository.Name)
+		log.Println("Updated", fullName)
 
 		time.Sleep(5 * time.Second) // wait 5 seconds to avoid rate limits
 	}
