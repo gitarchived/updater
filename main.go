@@ -18,6 +18,8 @@ import (
 	"gorm.io/gorm"
 )
 
+var ctx = context.Background()
+
 func main() {
 	prod := os.Getenv("PRODUCTION")
 
@@ -53,14 +55,25 @@ func main() {
 
 	log.Println("Found", result.RowsAffected, "repositories. updating...")
 
-	var ctx = context.Background()
-
 	for _, repository := range repositories {
+		if repository.Deleted {
+			log.Println("Skipping", repository.Name, "because it's deleted")
+			continue
+		}
+
 		log.Println("Updating", repository.Name)
 
 		lastCommit, err := utils.GetLastCommit(repository.Name)
 
 		if err != nil {
+			// Move the repository to the deleted state
+			err = db.Model(&models.Repository{}).Where("id = ?", repository.ID).Update("deleted", true).Error
+
+			if err != nil {
+				log.Println("Error updating deleted state for", repository.Name)
+				continue
+			}
+
 			log.Println("Error getting last commit for", repository.Name)
 			continue
 		}
@@ -88,7 +101,7 @@ func main() {
 		}
 
 		path := utils.GetSplitPath(name, repository.ID)
-		localPath := fmt.Sprintf("./%s", path)
+		localPath := fmt.Sprintf("./%s", strings.Join(path, "/"))
 		dir := strings.Join(path[:len(path)-1], "/")
 
 		// Save file local

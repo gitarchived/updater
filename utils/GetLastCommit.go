@@ -10,7 +10,6 @@ func GetLastCommit(repo string) (string, error) {
 	client := resty.New()
 
 	resp, err := client.R().
-		SetHeader("Accept", "application/vnd.github.v3+json").
 		SetResult([]CommitApiResponse{}).
 		Get("https://api.github.com/repos/" + repo + "/commits")
 

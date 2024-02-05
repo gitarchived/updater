@@ -8,4 +8,5 @@ type Repository struct {
 	Name       string // `user/repo`
 	Host       string // `github`
 	LastCommit string
+	Deleted    bool
 }
