@@ -49,9 +49,20 @@ func main() {
 
 	log.Println("Connected to PostgreSQL at " + db.Dialector.Name())
 
+	// Get `HOST` from the database
+	hostName := os.Getenv("HOST")
+
+	var host models.Host
+
+	hostQuery := db.Where("name = ?", hostName).First(&host)
+
+	if hostQuery.Error != nil {
+		log.Fatal("Error getting host from database")
+	}
+
 	var repositories []models.Repository
 
-	result := db.Find(&repositories)
+	result := db.Where("host = ?", host.Name).Find(&repositories)
 
 	log.Println("Found", result.RowsAffected, "repositories. updating...")
 
@@ -84,7 +95,7 @@ func main() {
 		}
 
 		fullName := repository.Owner + "/" + repository.Name
-		cmdClone := exec.Command("git", "clone", "--depth=100", fmt.Sprintf("https://github.com/%s", fullName))
+		cmdClone := exec.Command("git", "clone", "--depth=100", host.Prefix+fullName+".git")
 
 		if err := cmdClone.Run(); err != nil {
 			log.Println("Error cloning", fullName)
