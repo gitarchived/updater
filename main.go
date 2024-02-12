@@ -103,7 +103,7 @@ func main() {
 		}
 
 		// Create a bunde file
-		cmdBundle := exec.Command("git", "bundle", "create", fmt.Sprintf("%d.bundle", repository.ID), "--all")
+		cmdBundle := exec.Command("git", "bundle", "create", fmt.Sprintf("%d.bundle", repository.ID), "HEAD")
 		cmdBundle.Dir = fmt.Sprintf("./%s", repository.Name)
 
 		if err := cmdBundle.Run(); err != nil {
