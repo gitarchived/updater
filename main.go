@@ -131,7 +131,7 @@ func main() {
 		}
 
 		// Upload file to object storage
-		_, err = storage.FPutObject(ctx, os.Getenv("STORAGE_BUCKET"), strings.Join(path, "/"), strings.Join(path, "/"), minio.PutObjectOptions{})
+		_, err = storage.FPutObject(ctx, os.Getenv("STORAGE_BUCKET"), strings.Join(path, "/"), strings.Join(path, "/"), minio.PutObjectOptions{ContentType: "application/octet-stream"})
 
 		if err != nil {
 			log.Println("Error uploading file for", fullName)
