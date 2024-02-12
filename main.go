@@ -89,11 +89,9 @@ func main() {
 			continue
 		}
 
-		if os.Getenv("FORCE") == "true" {
-			if lastCommit == repository.LastCommit {
-				log.Println("No new commits for", repository.Name, "skipping...")
-				continue
-			}
+		if lastCommit == repository.LastCommit {
+			log.Println("No new commits for", repository.Name, "skipping...")
+			continue
 		}
 
 		fullName := repository.Owner + "/" + repository.Name
