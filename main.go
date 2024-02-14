@@ -2,13 +2,13 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"log"
+	"flag"
 	"os"
-	"os/exec"
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/log"
+	"github.com/gitarchived/updater/git"
 	"github.com/gitarchived/updater/models"
 	"github.com/gitarchived/updater/utils"
 	"github.com/joho/godotenv"
@@ -21,10 +21,15 @@ import (
 var ctx = context.Background()
 
 func main() {
-	prod := os.Getenv("PRODUCTION")
+	useEnv := flag.Bool("env", false, "Use .env file")
+	useForce := flag.Bool("force", false, "Force update")
+	useNoSSL := flag.Bool("no-ssl", false, "Use no SSL")
 
-	if prod == "" {
+	flag.Parse()
+
+	if *useEnv {
 		err := godotenv.Load()
+
 		if err != nil {
 			log.Fatal("Error loading .env file")
 		}
@@ -32,22 +37,18 @@ func main() {
 
 	storage, err := minio.New(os.Getenv("STORAGE_ENDPOINT"), &minio.Options{
 		Creds:  credentials.NewStaticV4(os.Getenv("STORAGE_KEY"), os.Getenv("STORAGE_SECRET"), ""),
-		Secure: os.Getenv("STORAGE_SSL") == "true",
+		Secure: !*useNoSSL,
 	})
 
 	if err != nil {
 		log.Fatal("Error creating Object Storage client")
 	}
 
-	log.Println("Connected to Object Storage at " + storage.EndpointURL().Host)
-
 	db, err := gorm.Open(postgres.Open(os.Getenv("PG_URL")), &gorm.Config{})
 
 	if err != nil {
 		log.Fatal("Error connecting to PostgreSQL")
 	}
-
-	log.Println("Connected to PostgreSQL at " + db.Dialector.Name())
 
 	// Get `HOST` from the database
 	hostName := os.Getenv("HOST")
@@ -64,104 +65,83 @@ func main() {
 
 	result := db.Where("host = ?", host.Name).Find(&repositories)
 
-	log.Println("Found", result.RowsAffected, "repositories. updating...")
+	log.Info("Starting to update repositories", "repositories", result.RowsAffected)
 
-	for _, repository := range repositories {
-		if repository.Deleted {
-			log.Println("Skipping", repository.Name, "because it's deleted")
+	for _, r := range repositories {
+		if r.Deleted {
+			log.Warn("Skipping, repository is deleted", "repository", r.Name)
 			continue
 		}
 
-		log.Println("Updating", repository.Owner+"/"+repository.Name)
+		log.Info("Updating", "repository", r.Name)
 
-		lastCommit, err := utils.GetLastCommit(repository.Owner, repository.Name)
+		lastCommit, err := git.GetLastCommit(r, host)
 
 		if err != nil {
 			// Move the repository to the deleted state
-			err = db.Model(&models.Repository{}).Where("id = ?", repository.ID).Update("deleted", true).Error
+			err = db.Model(&models.Repository{}).Where("id = ?", r.ID).Update("deleted", true).Error
 
 			if err != nil {
-				log.Println("Error updating deleted state for", repository.Name)
+				log.Error("Error updating deleted state", "repository", r.Name)
 				continue
 			}
 
-			log.Println("Error getting last commit for", repository.Name)
+			log.Error("Error getting last commit", "repository", r.Name)
 			continue
 		}
 
-		if lastCommit == repository.LastCommit {
-			log.Println("No new commits for", repository.Name, "skipping...")
+		if !*useForce && lastCommit == r.LastCommit {
+			log.Warn("Skipping, no new commits", "repository", r.Name)
 			continue
 		}
 
-		fullName := repository.Owner + "/" + repository.Name
-		cmdClone := exec.Command("git", "clone", "--depth=100", host.Prefix+fullName+".git")
-
-		if err := cmdClone.Run(); err != nil {
-			log.Println("Error cloning", fullName)
-			continue
-		}
-
-		// Create a bunde file
-		cmdBundle := exec.Command("git", "bundle", "create", fmt.Sprintf("%d.bundle", repository.ID), "HEAD")
-		cmdBundle.Dir = fmt.Sprintf("./%s", repository.Name)
-
-		if err := cmdBundle.Run(); err != nil {
-			log.Println("Error creating bundle for", fullName)
-		}
-
-		path := utils.GetSplitPath(repository.Name, repository.ID)
-		localPath := fmt.Sprintf("./%s", strings.Join(path, "/"))
-		dir := strings.Join(path[:len(path)-1], "/")
-
-		// Save file local
-		err = os.MkdirAll(dir, os.ModePerm)
+		_, err = git.BundleRemote(r, host)
+		splittedPath := utils.GetSplitPath(r.Name, r.ID)
 
 		if err != nil {
-			log.Println("Error creating folders for", fullName)
-			continue
-		}
-
-		// Move the file to the right path
-		err = os.Rename(fmt.Sprintf("./%s/%d.bundle", repository.Name, repository.ID), localPath)
-
-		if err != nil {
-			log.Println("Error moving file for", fullName)
+			log.Error("Error creating bundle", "repository", r.Name)
 			continue
 		}
 
 		// Upload file to object storage
-		_, err = storage.FPutObject(ctx, os.Getenv("STORAGE_BUCKET"), strings.Join(path, "/"), strings.Join(path, "/"), minio.PutObjectOptions{ContentType: "application/octet-stream"})
+		_, err = storage.FPutObject(
+			ctx,
+			os.Getenv("STORAGE_BUCKET"),
+			strings.Join(splittedPath, "/"),
+			strings.Join(splittedPath, "/"),
+			minio.PutObjectOptions{ContentType: "application/octet-stream"},
+		)
 
 		if err != nil {
-			log.Println("Error uploading file for", fullName)
+			log.Error("Error uploading bundle to object storage", "repository", r.Name)
 			continue
 		}
 
 		// Remove file local (even the directories)
-		err = os.RemoveAll(strings.Split(localPath, "/")[1])
+		err = os.RemoveAll(splittedPath[0])
 
 		if err != nil {
-			log.Println("Error removing local file for", fullName)
+			println(err.Error())
+			log.Error("Error removing local bundle", "repository", r.Name)
 			continue
 		}
 
 		// Remove the repository
-		err = os.RemoveAll(repository.Name)
+		err = os.RemoveAll(r.Name)
 
 		if err != nil {
-			log.Println("Error removing local repository for", fullName)
+			log.Error("Error removing local repository", "repository", r.Name)
 			continue
 		}
 
-		err = db.Model(&models.Repository{}).Where("id = ?", repository.ID).Update("last_commit", lastCommit).Error
+		err = db.Model(&models.Repository{}).Where("id = ?", r.ID).Update("last_commit", lastCommit).Error
 
 		if err != nil {
-			log.Println("Error updating last commit for", fullName)
+			log.Error("Error updating last commit", "repository", r.Name)
 			continue
 		}
 
-		log.Println("Updated", fullName)
+		log.Info("Updated", "repository", r.Name)
 
 		time.Sleep(5 * time.Second) // wait 5 seconds to avoid rate limits
 	}
