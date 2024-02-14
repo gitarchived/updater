@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/log"
+	"github.com/gitarchived/updater/events"
 	"github.com/gitarchived/updater/git"
 	"github.com/gitarchived/updater/models"
 	"github.com/gitarchived/updater/utils"
@@ -24,6 +25,7 @@ func main() {
 	useEnv := flag.Bool("env", false, "Use .env file")
 	useForce := flag.Bool("force", false, "Force update")
 	useNoSSL := flag.Bool("no-ssl", false, "Use no SSL")
+	useEvents := flag.Bool("events", false, "Use events")
 
 	flag.Parse()
 
@@ -121,7 +123,6 @@ func main() {
 		err = os.RemoveAll(splittedPath[0])
 
 		if err != nil {
-			println(err.Error())
 			log.Error("Error removing local bundle", "repository", r.Name)
 			continue
 		}
@@ -144,5 +145,13 @@ func main() {
 		log.Info("Updated", "repository", r.Name)
 
 		time.Sleep(5 * time.Second) // wait 5 seconds to avoid rate limits
+	}
+
+	if *useEvents {
+		err := events.PropagateEnd()
+
+		if err != nil {
+			log.Error("Error propagating end event", "event", "end")
+		}
 	}
 }
