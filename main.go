@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/log"
 	"github.com/gitarchived/updater/events"
 	"github.com/gitarchived/updater/git"
+	"github.com/gitarchived/updater/logger"
 	"github.com/gitarchived/updater/models"
 	"github.com/gitarchived/updater/utils"
 	"github.com/joho/godotenv"
@@ -84,11 +85,11 @@ func main() {
 			err = db.Model(&models.Repository{}).Where("id = ?", r.ID).Update("deleted", true).Error
 
 			if err != nil {
-				log.Error("Error updating deleted state", "repository", r.Name)
+				logger.HandleError(r, host, err)
 				continue
 			}
 
-			log.Error("Error getting last commit", "repository", r.Name)
+			logger.HandleError(r, host, err)
 			continue
 		}
 
@@ -101,7 +102,7 @@ func main() {
 		splittedPath := utils.GetSplitPath(r.Name, r.ID)
 
 		if err != nil {
-			log.Error("Error creating bundle", "repository", r.Name)
+			logger.HandleError(r, host, err)
 			continue
 		}
 
@@ -115,7 +116,7 @@ func main() {
 		)
 
 		if err != nil {
-			log.Error("Error uploading bundle to object storage", "repository", r.Name)
+			logger.HandleError(r, host, err)
 			continue
 		}
 
@@ -123,7 +124,7 @@ func main() {
 		err = os.RemoveAll(splittedPath[0])
 
 		if err != nil {
-			log.Error("Error removing local bundle", "repository", r.Name)
+			logger.HandleError(r, host, err)
 			continue
 		}
 
@@ -131,14 +132,14 @@ func main() {
 		err = os.RemoveAll(r.Name)
 
 		if err != nil {
-			log.Error("Error removing local repository", "repository", r.Name)
+			logger.HandleError(r, host, err)
 			continue
 		}
 
 		err = db.Model(&models.Repository{}).Where("id = ?", r.ID).Update("last_commit", lastCommit).Error
 
 		if err != nil {
-			log.Error("Error updating last commit", "repository", r.Name)
+			logger.HandleError(r, host, err)
 			continue
 		}
 
