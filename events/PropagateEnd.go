@@ -7,7 +7,7 @@ import (
 	"github.com/go-resty/resty/v2"
 )
 
-func PropagateEnd() error {
+func PropagateEnd(total int, updated int) error {
 	url := os.Getenv("EVENTS_END")
 	key := os.Getenv("EVENTS_KEY")
 
@@ -15,6 +15,8 @@ func PropagateEnd() error {
 
 	resp, err := client.R().
 		SetHeader("Authorization", key).
+		SetHeader("Content-Type", "application/json").
+		SetBody(map[string]int{"total": total, "updated": updated}).
 		Post(url)
 
 	if err != nil {

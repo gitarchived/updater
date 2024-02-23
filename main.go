@@ -70,6 +70,8 @@ func main() {
 
 	log.Info("Starting to update repositories", "repositories", result.RowsAffected)
 
+	updated := 0
+
 	for _, r := range repositories {
 		if r.Deleted {
 			log.Warn("Skipping, repository is deleted", "repository", r.Name)
@@ -145,11 +147,13 @@ func main() {
 
 		log.Info("Updated", "repository", r.Name)
 
+		updated++
+
 		time.Sleep(5 * time.Second) // wait 5 seconds to avoid rate limits
 	}
 
 	if *useEvents {
-		err := events.PropagateEnd()
+		err := events.PropagateEnd(int(result.RowsAffected), len(repositories))
 
 		if err != nil {
 			log.Error("Error propagating end event", "event", "end")
