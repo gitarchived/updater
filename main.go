@@ -147,7 +147,9 @@ func main() {
 
 		log.Info("Updated", "repository", r.Name)
 
-		updated++
+		if !*useForce && lastCommit != r.LastCommit {
+			updated++
+		}
 
 		time.Sleep(5 * time.Second) // wait 5 seconds to avoid rate limits
 	}
