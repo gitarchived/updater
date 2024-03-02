@@ -4,10 +4,10 @@ import (
 	"context"
 	"flag"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/charmbracelet/log"
+	"github.com/gitarchived/updater/database"
 	"github.com/gitarchived/updater/events"
 	"github.com/gitarchived/updater/git"
 	"github.com/gitarchived/updater/logger"
@@ -64,44 +64,23 @@ func main() {
 		log.Fatal("Error getting host from database")
 	}
 
-	var repositories []models.Repository
+	repositories, err := database.GetRepositories(db, host, *useForce)
 
-	result := db.Where("host = ?", host.Name).Find(&repositories)
+	if err != nil {
+		log.Fatal("Error getting repositories from database")
+	}
 
-	log.Info("Starting to update repositories", "repositories", result.RowsAffected)
+	log.Info("Starting to update repositories")
 
 	updated := 0
 
-	for _, r := range repositories {
-		if r.Deleted {
-			log.Warn("Skipping, repository is deleted", "repository", r.Name)
-			continue
-		}
+	for _, repo := range repositories {
+		r := repo.Repository
+		lastCommit := repo.NewCommitHash
 
 		log.Info("Updating", "repository", r.Name)
 
-		lastCommit, err := git.GetLastCommit(r, host)
-
-		if err != nil {
-			// Move the repository to the deleted state
-			err = db.Model(&models.Repository{}).Where("id = ?", r.ID).Update("deleted", true).Error
-
-			if err != nil {
-				logger.HandleError(r, host, err)
-				continue
-			}
-
-			logger.HandleError(r, host, err)
-			continue
-		}
-
-		if !*useForce && lastCommit == r.LastCommit {
-			log.Warn("Skipping, no new commits", "repository", r.Name)
-			continue
-		}
-
-		_, err = git.BundleRemote(r, host)
-		splittedPath := utils.GetSplitPath(r.Name, r.ID)
+		path, splittedPath, err := git.BundleRemote(r, host)
 
 		if err != nil {
 			logger.HandleError(r, host, err)
@@ -112,8 +91,8 @@ func main() {
 		_, err = storage.FPutObject(
 			ctx,
 			os.Getenv("STORAGE_BUCKET"),
-			strings.Join(splittedPath, "/"),
-			strings.Join(splittedPath, "/"),
+			path,
+			path,
 			minio.PutObjectOptions{ContentType: "application/octet-stream"},
 		)
 
@@ -122,40 +101,24 @@ func main() {
 			continue
 		}
 
-		// Remove file local (even the directories)
-		err = os.RemoveAll(splittedPath[0])
-
-		if err != nil {
+		if err := utils.Clear(r.Name, splittedPath); err != nil {
 			logger.HandleError(r, host, err)
 			continue
 		}
 
-		// Remove the repository
-		err = os.RemoveAll(r.Name)
-
-		if err != nil {
-			logger.HandleError(r, host, err)
-			continue
-		}
-
-		err = db.Model(&models.Repository{}).Where("id = ?", r.ID).Update("last_commit", lastCommit).Error
-
-		if err != nil {
-			logger.HandleError(r, host, err)
+		if err := db.Model(&models.Repository{}).Where("id = ?", r.ID).Update("last_commit", lastCommit); err.Error != nil {
+			logger.HandleError(r, host, err.Error)
 			continue
 		}
 
 		log.Info("Updated", "repository", r.Name)
 
-		if !*useForce && lastCommit != r.LastCommit {
-			updated++
-		}
-
+		updated++
 		time.Sleep(5 * time.Second) // wait 5 seconds to avoid rate limits
 	}
 
 	if *useEvents {
-		err := events.PropagateEnd(int(result.RowsAffected), len(repositories))
+		err := events.PropagateEnd(len(repositories), len(repositories)) // Needs some work from the events api side
 
 		if err != nil {
 			log.Error("Error propagating end event", "event", "end")

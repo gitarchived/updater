@@ -10,4 +10,8 @@ RUN go mod download && go mod verify
 COPY . .
 RUN go build -v -o ./app 
 
+RUN cp -r ./app ./workdir
+
+WORKDIR /app/workdir
+
 CMD ["./app", "--events"]

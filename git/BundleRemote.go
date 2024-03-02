@@ -10,12 +10,12 @@ import (
 	"github.com/gitarchived/updater/utils"
 )
 
-func BundleRemote(r models.Repository, h models.Host) (string, error) {
+func BundleRemote(r models.Repository, h models.Host) (string, []string, error) {
 	url := fmt.Sprintf("%s%s/%s.git", h.Prefix, r.Owner, r.Name)
 	cloneCmd := exec.Command("git", "clone", "--depth=100", url)
 
 	if err := cloneCmd.Run(); err != nil {
-		return "", err
+		return "", nil, err
 	}
 
 	// Create a bunde file
@@ -23,7 +23,7 @@ func BundleRemote(r models.Repository, h models.Host) (string, error) {
 	bundleCmd.Dir = fmt.Sprintf("./%s", r.Name)
 
 	if err := bundleCmd.Run(); err != nil {
-		return "", err
+		return "", nil, err
 	}
 
 	path := utils.GetSplitPath(r.Name, r.ID)
@@ -34,15 +34,17 @@ func BundleRemote(r models.Repository, h models.Host) (string, error) {
 	err := os.MkdirAll(dir, os.ModePerm)
 
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 
 	// Move the file to the right path
 	err = os.Rename(fmt.Sprintf("./%s/%d.bundle", r.Name, r.ID), localPath)
 
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 
-	return localPath, nil
+	// Why not return localPath? It's because S3 dosn't support ./ or ../ similiar symbols in front of the path
+	// https://stackoverflow.com/questions/30518899/amazon-s3-how-to-fix-the-request-signature-we-calculated-does-not-match-the-s
+	return strings.Join(path, "/"), path, nil
 }
