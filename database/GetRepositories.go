@@ -45,6 +45,7 @@ func GetRepositories(db *gorm.DB, host models.Host, force bool) ([]Repository, e
 	}
 
 	wg.Wait()
+	close(limiter)
 
 	return results, data.Error
 }
