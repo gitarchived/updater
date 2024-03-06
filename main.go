@@ -13,6 +13,7 @@ import (
 	"github.com/gitarchived/updater/logger"
 	"github.com/gitarchived/updater/models"
 	"github.com/gitarchived/updater/utils"
+	"github.com/go-resty/resty/v2"
 	"github.com/joho/godotenv"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -62,6 +63,17 @@ func main() {
 
 	if hostQuery.Error != nil {
 		log.Fatal("Error getting host from database")
+	}
+
+	log.Info("Checking host connectivity", "host", host.Name)
+
+	client := resty.New()
+	resp, err := client.R().
+		Get(host.URL)
+
+	if err != nil || resp.StatusCode() != 200 {
+		log.Fatal("Error getting host", "host", host.Name)
+		os.Exit(1)
 	}
 
 	repositories, err := database.GetRepositories(db, host, *useForce)
