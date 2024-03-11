@@ -1,0 +1,3 @@
+#!/usr/bin/bash
+
+echo .env >> "PG_URL=\nSTORAGE_BUCKET=\nSTORAGE_ENDPOINT=\nSTORAGE_KEY=\nSTORAGE_SECRET=\nHOST="

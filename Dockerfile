@@ -8,10 +8,10 @@ COPY go.mod go.sum ./
 RUN go mod download && go mod verify
 
 COPY . .
-RUN go build -v -o ./app 
+RUN go build -o bin/updater cmd/updater/main.go
 
-RUN cp -r ./app ./workdir
+RUN cp -r ./bin/updater ./workdir
 
 WORKDIR /app/workdir
 
-CMD ["./app", "--events"]
+CMD ["./updater"]

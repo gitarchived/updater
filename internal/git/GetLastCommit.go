@@ -5,10 +5,10 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/gitarchived/updater/models"
+	"github.com/gitarchived/updater/data"
 )
 
-func GetLastCommit(r models.Repository, h models.Host) (string, error) {
+func GetLastCommit(r data.Repository, h data.Host) (string, error) {
 	url := fmt.Sprintf("%s%s/%s.git", h.Prefix, r.Owner, r.Name)
 	lsRemoteCmd := exec.Command("git", "ls-remote", url, "HEAD")
 

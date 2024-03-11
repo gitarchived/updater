@@ -6,11 +6,11 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/gitarchived/updater/models"
-	"github.com/gitarchived/updater/utils"
+	"github.com/gitarchived/updater/data"
+	"github.com/gitarchived/updater/internal/util"
 )
 
-func BundleRemote(r models.Repository, h models.Host) (string, []string, error) {
+func BundleRemote(r data.Repository, h data.Host) (string, []string, error) {
 	url := fmt.Sprintf("%s%s/%s.git", h.Prefix, r.Owner, r.Name)
 	cloneCmd := exec.Command("git", "clone", "--depth=100", url)
 
@@ -26,7 +26,7 @@ func BundleRemote(r models.Repository, h models.Host) (string, []string, error) 
 		return "", nil, err
 	}
 
-	path := utils.GetSplitPath(r.Name, r.ID)
+	path := util.GetSplitPath(r.Name, r.ID)
 	localPath := fmt.Sprintf("./%s", strings.Join(path, "/"))
 	dir := strings.Join(path[:len(path)-1], "/")
 
