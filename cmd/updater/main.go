@@ -115,6 +115,6 @@ func main() {
 
 		log.Info("Updated", "repository", r.Name)
 
-		time.Sleep(10 * time.Second) // wait 5 seconds to avoid rate limits
+		time.Sleep(5 * time.Second) // wait 5 seconds to avoid rate limits
 	}
 }

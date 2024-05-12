@@ -1,6 +1,8 @@
 package db
 
 import (
+	"time"
+
 	"github.com/gitarchived/updater/data"
 	"github.com/gitarchived/updater/internal/git"
 	"gorm.io/gorm"
@@ -29,6 +31,8 @@ func GetRepositories(db *gorm.DB, host data.Host, force bool) ([]Repository, err
 		if commit != r.LastCommit || force {
 			results = append(results, Repository{Repository: r, NewCommitHash: commit})
 		}
+
+		time.Sleep(3 * time.Second)
 	}
 
 	return results, res.Error
