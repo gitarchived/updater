@@ -11,6 +11,7 @@ import (
 func GetLastCommit(r data.Repository, h data.Host) (string, error) {
 	url := fmt.Sprintf("%s%s/%s.git", h.Prefix, r.Owner, r.Name)
 	lsRemoteCmd := exec.Command("git", "ls-remote", url, "HEAD")
+	lsRemoteCmd.Env = append(lsRemoteCmd.Env, "GIT_TERMINAL_PROMPT=0")
 
 	out, err := lsRemoteCmd.Output()
 

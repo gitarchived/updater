@@ -14,4 +14,6 @@ RUN cp -r ./bin/updater ./workdir
 
 WORKDIR /app/workdir
 
+RUN git config --global http.postBuffer 157286400
+
 CMD ["./updater"]
