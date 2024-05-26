@@ -20,6 +20,7 @@ func BundleRemote(r data.Repository, h data.Host) (string, []string, error) {
 
 	// Create a bunde file
 	bundleCmd := exec.Command("git", "bundle", "create", fmt.Sprintf("%d.bundle", r.ID), "HEAD")
+	bundleCmd.Env = append(bundleCmd.Env, "GIT_TERMINAL_PROMPT=0")
 	bundleCmd.Dir = fmt.Sprintf("./%s", r.Name)
 
 	if err := bundleCmd.Run(); err != nil {
